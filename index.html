@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phoneme Explorer — GA (SPE ↔ Davenport)</title>
+<style>
+  :root { --bg:#f7f7fb; --card:#fff; --ink:#111; --muted:#6b7280; --line:#e5e7eb; --accent:#111; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--ink); }
+  header { position:sticky; top:0; backdrop-filter:blur(6px); background:rgba(255,255,255,.8); border-bottom:1px solid var(--line); }
+  .container { max-width:1200px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:0; }
+  main { display:grid; grid-template-columns: 1fr; gap:24px; padding:24px 0; }
+  @media (min-width: 1100px){ main { grid-template-columns: 300px 1fr; } }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .group-title { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:12px 0 8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:1px solid var(--line); background:#fff; color:#111; padding:6px 10px; border-radius:999px; font-size:13px; cursor:pointer; }
+  .chip.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .grid { display:grid; grid-template-columns: repeat(6, 1fr); gap:10px; }
+  @media (min-width: 700px){ .grid{ grid-template-columns: repeat(8, 1fr);} }
+  @media (min-width: 1000px){ .grid{ grid-template-columns: repeat(10, 1fr);} }
+  .tile { height:56px; border-radius:14px; border:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:26px; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .tile:hover { box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+  .tile.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+  .muted { color:var(--muted); font-size:12px; }
+  .btn { font-size:13px; padding:6px 10px; border:1px solid var(--line); background:#fff; border-radius:8px; cursor:pointer; }
+  .btn:hover { background:#f3f4f6; }
+  .badge { font-size:11px; padding:4px 8px; background:#f3f4f6; border:1px solid var(--line); border-radius:999px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:6px 8px; border-bottom:1px solid var(--line); text-align:left; }
+  td:last-child { text-align:right; font-weight:600; }
+  .pos { color:#065f46; }
+  .neg { color:#991b1b; }
+  .footer { font-size:12px; color:#muted; padding-bottom:24px; }
+  code { background:#f3f4f6; padding:2px 6px; border-radius:6px; }
+  .section-title { font-size:14px; font-weight:700; margin:8px 0; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="container row">
+      <div class="row" style="gap:12px;">
+        <h1>Phoneme Explorer — GA</h1>
+        <span class="badge" id="systemBadge">System: SPE_1968</span>
+      </div>
+      <div class="row" style="gap:8px;">
+        <button class="btn" id="toggleSystem">Toggle SPE ↔ Davenport</button>
+        <button class="btn" id="clearSelectionBtn">Clear Selection</button>
+        <button class="btn" id="resetBtn">Reset Filters</button>
+        <button class="btn" id="exportBtn">Export JSON</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <main>
+      <section class="panel" id="filters"></section>
+      <section>
+        <div class="row">
+          <div class="muted">Results: <span id="count">0</span></div>
+          <div class="muted" id="activeConstraints"></div>
+        </div>
+        <div class="section-title">Consonants</div>
+        <div class="grid" id="gridConsonants"></div>
+        <div class="section-title" style="margin-top:16px;">Vowels</div>
+        <div class="grid" id="gridVowels"></div>
+        <div class="panel" id="details" style="margin-top:16px;">
+          <h3 style="margin:6px 0 8px; font-size:15px;">Details</h3>
+          <div id="detailsContent" class="muted">Select one or more phonemes to see feature bundles and shared classes.</div>
+        </div>
+      </section>
+    </main>
+
+    <div class="footer">
+      Tips: Combine chips to see intersections. Click multiple phonemes to see shared (intersection) features/classes. Toggle systems to compare analyses.
+    </div>
+  </div>
+
+<script>
+const PHONEMES = [
+  P('p', {SPE_1968: C({voice:'-', cont:'-', delrel:'-', lab:'+'}), Davenport: D({manner:'Stop', place:'Labial', voicing:'Voiceless'})}),
+  P('b', {SPE_1968: C({voice:'+', cont:'-', delrel:'-', lab:'+'}), Davenport: D({manner:'Stop', place:'Labial', voicing:'Voiced'})}),
+  P('t', {SPE_1968: C({voice:'-', cont:'-', delrel:'-', cor:'+', ant:'+', dist:'-'}), Davenport: D({manner:'Stop', place:'Coronal', voicing:'Voiceless'})}),
+  P('d', {SPE_1968: C({voice:'+', cont:'-', delrel:'-', cor:'+', ant:'+', dist:'-'}), Davenport: D({manner:'Stop', place:'Coronal', voicing:'Voiced'})}),
+  P('k', {SPE_1968: C({voice:'-', cont:'-', delrel:'-', dors:'+'}), Davenport: D({manner:'Stop', place:'Dorsal', voicing:'Voiceless'})}),
+  P('g', {SPE_1968: C({voice:'+', cont:'-', delrel:'-', dors:'+'}), Davenport: D({manner:'Stop', place:'Dorsal', voicing:'Voiced'})}),
+
+  P('t͡ʃ', {SPE_1968: C({voice:'-', cont:'-', delrel:'+', strid:'+', cor:'+', ant:'-', dist:'+'}), Davenport: D({manner:'Affricate', place:'Coronal', voicing:'Voiceless'})}),
+  P('d͡ʒ', {SPE_1968: C({voice:'+', cont:'-', delrel:'+', strid:'+', cor:'+', ant:'-', dist:'+'}), Davenport: D({manner:'Affricate', place:'Coronal', voicing:'Voiced'})}),
+
+  P('f', {SPE_1968: C({voice:'-', cont:'+', lab:'+'}), Davenport: D({manner:'Fricative', place:'Labial', voicing:'Voiceless'})}),
+  P('v', {SPE_1968: C({voice:'+', cont:'+', lab:'+'}), Davenport: D({manner:'Fricative', place:'Labial', voicing:'Voiced'})}),
+  P('θ', {SPE_1968: C({voice:'-', cont:'+', cor:'+', ant:'+', dist:'+'}), Davenport: D({manner:'Fricative', place:'Coronal', voicing:'Voiceless'})}),
+  P('ð', {SPE_1968: C({voice:'+', cont:'+', cor:'+', ant:'+', dist:'+'}), Davenport: D({manner:'Fricative', place:'Coronal', voicing:'Voiced'})}),
+  P('s', {SPE_1968: C({voice:'-', cont:'+', strid:'+', cor:'+', ant:'+', dist:'-'}), Davenport: D({manner:'Fricative', place:'Coronal', voicing:'Voiceless'})}),
+  P('z', {SPE_1968: C({voice:'+', cont:'+', strid:'+', cor:'+', ant:'+', dist:'-'}), Davenport: D({manner:'Fricative', place:'Coronal', voicing:'Voiced'})}),
+  P('ʃ', {SPE_1968: C({voice:'-', cont:'+', strid:'+', cor:'+', ant:'-', dist:'+'}), Davenport: D({manner:'Fricative', place:'Coronal', voicing:'Voiceless'})}),
+  P('ʒ', {SPE_1968: C({voice:'+', cont:'+', strid:'+', cor:'+', ant:'-', dist:'+'}), Davenport: D({manner:'Fricative', place:'Coronal', voicing:'Voiced'})}),
+  P('h', {SPE_1968: C({voice:'-', cont:'+', spr_glot:'+'}), Davenport: D({manner:'Fricative', place:'Glottal', voicing:'Voiceless'})}),
+
+  P('m', {SPE_1968: C({son:'+', nas:'+', voice:'+', cont:'-', lab:'+'}), Davenport: D({manner:'Nasal', place:'Labial', voicing:'Voiced'})}),
+  P('n', {SPE_1968: C({son:'+', nas:'+', voice:'+', cont:'-', cor:'+', ant:'+', dist:'-'}), Davenport: D({manner:'Nasal', place:'Coronal', voicing:'Voiced'})}),
+  P('ŋ', {SPE_1968: C({son:'+', nas:'+', voice:'+', cont:'-', dors:'+'}), Davenport: D({manner:'Nasal', place:'Dorsal', voicing:'Voiced'})}),
+
+  P('l', {SPE_1968: C({son:'+', cons:'+', cont:'+', lat:'+', voice:'+', cor:'+', ant:'+', dist:'-'}), Davenport: D({manner:'Liquid', place:'Coronal', voicing:'Voiced'})}),
+  P('ɹ', {SPE_1968: C({son:'+', cons:'+', cont:'+', voice:'+', cor:'+', ant:'+', dist:'+'}), Davenport: D({manner:'Liquid', place:'Coronal', voicing:'Voiced'})}),
+
+  P('w', {SPE_1968: C({cons:'-', son:'+', voice:'+', cont:'+', lab:'+', dors:'+', round:'+'}), Davenport: D({manner:'Glide', place:'Labial+Dorsal', voicing:'Voiced'})}),
+  P('j', {SPE_1968: C({cons:'-', son:'+', voice:'+', cont:'+', dors:'+'}), Davenport: D({manner:'Glide', place:'Dorsal', voicing:'Voiced'})}),
+
+  V('i',  {SPE_1968: V_SPE({high:'+', back:'-', tense:'+', round:'-'}), Davenport: V_Dav({height:'High', backness:'Front', tenseness:'Tense', rounding:'Unrounded'})}),
+  V('ɪ',  {SPE_1968: V_SPE({high:'+', back:'-', tense:'-', round:'-'}), Davenport: V_Dav({height:'High', backness:'Front', tenseness:'Lax', rounding:'Unrounded'})}),
+  V('ɛ',  {SPE_1968: V_SPE({high:'-', low:'-', back:'-', tense:'-', round:'-'}), Davenport: V_Dav({height:'Mid', backness:'Front', tenseness:'Lax', rounding:'Unrounded'})}),
+  V('æ',  {SPE_1968: V_SPE({low:'+', back:'-', tense:'-', round:'-'}), Davenport: V_Dav({height:'Low', backness:'Front', tenseness:'Lax', rounding:'Unrounded'})}),
+
+  V('ə',  {SPE_1968: V_SPE({high:'-', low:'-', tense:'-', round:'-'}), Davenport: V_Dav({height:'Mid', backness:'Central', tenseness:'Lax', rounding:'Unrounded'})}),
+  V('ʌ',  {SPE_1968: V_SPE({high:'-', low:'-', tense:'-', round:'-'}), Davenport: V_Dav({height:'Mid', backness:'Central', tenseness:'Lax', rounding:'Unrounded'})}),
+  V('ɚ',  {SPE_1968: V_SPE({high:'-', low:'-', tense:'-', round:'-', rhotic:'+'}), Davenport: V_Dav({height:'Mid', backness:'Central', tenseness:'Lax', rounding:'Unrounded', rhoticity:'Rhotic'})}),
+  V('ɝ',  {SPE_1968: V_SPE({high:'-', low:'-', tense:'+', round:'-', rhotic:'+'}), Davenport: V_Dav({height:'Mid', backness:'Central', tenseness:'Tense', rounding:'Unrounded', rhoticity:'Rhotic'})}),
+
+  V('u',  {SPE_1968: V_SPE({high:'+', back:'+', tense:'+', round:'+'}), Davenport: V_Dav({height:'High', backness:'Back', tenseness:'Tense', rounding:'Rounded'})}),
+  V('ʊ',  {SPE_1968: V_SPE({high:'+', back:'+', tense:'-', round:'+'}), Davenport: V_Dav({height:'High', backness:'Back', tenseness:'Lax', rounding:'Rounded'})}),
+  V('ɔ',  {SPE_1968: V_SPE({high:'-', low:'-', back:'+', tense:'+', round:'+'}), Davenport: V_Dav({height:'Mid', backness:'Back', tenseness:'Tense', rounding:'Rounded'})}),
+  V('ɑ',  {SPE_1968: V_SPE({low:'+', back:'+', tense:'+' , round:'-'}), Davenport: V_Dav({height:'Low', backness:'Back', tenseness:'Tense', rounding:'Unrounded'})})
+];
+
+function baseSPE(add){ return Object.assign({
+  cons: undefined, son: undefined, syll: undefined, cont: undefined, delrel: undefined, lat: undefined, strid: undefined, nas: undefined, voice: undefined, spr_glot: undefined,
+  lab: undefined, cor: undefined, ant: undefined, dist: undefined, dors: undefined,
+  high: undefined, low: undefined, back: undefined, tense: undefined, round: undefined, rhotic: undefined
+}, add); }
+
+function C(add){ return baseSPE(Object.assign({cons:"+", son:"-", syll:"-", cont:"-", delrel:"-", lat:"-", strid:"-", nas:"-", voice:"-", spr_glot:"-", lab:"-", cor:"-", ant:"-", dist:"-", dors:"-"}, add)); }
+function V_SPE(add){ return baseSPE(Object.assign({cons:"-", son:"+", syll:"+", cont:"+", delrel:"-", lat:"-", strid:"-", nas:"-", voice:"+", spr_glot:"-", lab:"-", cor:"-", ant:"-", dist:"-", dors:"-"}, add)); }
+
+function D(add){ return Object.assign({manner:undefined, place:undefined, voicing:undefined}, add); }
+function V_Dav(add){ return Object.assign({height:undefined, backness:undefined, tenseness:undefined, rounding:undefined, rhoticity:undefined}, add); }
+
+function P(ipa, features){ return { ipa, type:'consonant', features }; }
+function V(ipa, features){ return { ipa, type:'vowel', features }; }
+
+const CLASSES = {
+  SPE_1968: {
+    type: { Consonant: { cons: "+" }, Vowel: { syll: "+" } },
+    manner: {
+      Stop:   { cont: "-", delrel: "-" , son:"-" },
+      Affricate: { cont:"-", delrel:"+", son:"-" },
+      Fricative: { cont:"+", son:"-" },
+      Nasal:  { nas:"+", son:"+" },
+      Liquid: { cons:"+", son:"+", cont:"+", nas:"-" },
+      Glide:  { cons:"-", son:"+", cont:"+" }
+    },
+    place: {
+      Labial: { lab: "+" },
+      Coronal: { cor: "+" },
+      Dorsal: { dors: "+" },
+      Glottal: { spr_glot: "+" }
+     },
+coronal_features: {
+  Anterior: { ant: "+" },
+  NonAnterior: { ant: "-" },
+  Distributed: { dist: "+" },
+  NonDistributed: { dist: "-" }
+    },
+    laryngeal: {
+      Voiceless: { voice: "-" },
+      Voiced: { voice: "+" }
+    },
+    vowel_height: {
+      High: { high: "+" },
+      Low: { low: "+" }
+    },
+    vowel_backness: {
+      Front: { back: "-" },
+      Back: { back: "+" }
+    },
+    vowel_round_tense: {
+      Round: { round: "+" },
+      Tense: { tense: "+" }
+    }
+  },
+  Davenport: {
+    type: { Consonant: { kind: "consonant" }, Vowel: { kind: "vowel" } },
+    manner: {
+      Stop: { manner: "Stop" }, Affricate: { manner: "Affricate" }, Fricative: { manner: "Fricative" },
+      Nasal: { manner: "Nasal" }, Liquid: { manner: "Liquid" }, Glide: { manner: "Glide" }
+    },
+    place: {
+      Labial: { place: "Labial" }, Coronal: { place: "Coronal" }, Dorsal: { place: "Dorsal" },
+      Glottal: { place: "Glottal" }, "Labial+Dorsal": { place: "Labial+Dorsal" }
+    },
+    coronal_features: {
+      Dental: { subplace: "Dental" },
+      Alveolar: { subplace: "Alveolar" },
+      Postalveolar: { subplace: "Postalveolar" }
+    },
+    laryngeal: { Voiceless: { voicing: "Voiceless" }, Voiced: { voicing: "Voiced" } },
+    vowel_height: { High: { height: "High" }, Mid: { height: "Mid" }, Low: { height: "Low" } },
+    vowel_backness: { Front: { backness: "Front" }, Central: { backness: "Central" }, Back: { backness: "Back" } },
+    vowel_round_tense: { Round: { rounding: "Rounded" }, Unround: { rounding: "Unrounded" },
+      Tense: { tenseness: "Tense" }, Lax: { tenseness: "Lax" } },
+    vowel_rhotic: { Rhotic: { rhoticity: "Rhotic" } }
+  }
+};
+
+function mergeConstraints(list) {
+  const out = {};
+  for (const obj of list) for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue;
+    if (k in out && out[k] !== v) out[k] = "#conflict"; else out[k] = v;
+  }
+  return out;
+}
+
+function matches(phoneme, constraint, system) {
+  const fRaw = phoneme.features[system] || {};
+  const f = Object.assign({}, fRaw);
+  f.kind = phoneme.type;
+  return Object.entries(constraint).every(([feat, val]) => {
+    if (val === "#conflict") return false;
+    return f[feat] === val;
+  });
+}
+
+const state = { system: "SPE_1968", activeChips: new Set(), selectedIPA: new Set() };
+
+function renderFilters() {
+  const filters = document.getElementById("filters");
+  filters.innerHTML = "";
+  const sys = state.system;
+  for (const [groupName, chips] of Object.entries(CLASSES[sys])) {
+    const title = document.createElement("div"); title.className = "group-title";
+    title.textContent = groupName.replace(/_/g, " "); filters.appendChild(title);
+    const row = document.createElement("div"); row.className = "chips";
+    for (const label of Object.keys(chips)) {
+      const btn = document.createElement("button");
+      btn.className = "chip" + (state.activeChips.has(label) ? " active" : "");
+      btn.textContent = label;
+      btn.onclick = () => { if (state.activeChips.has(label)) state.activeChips.delete(label); else state.activeChips.add(label); renderAll(); };
+      row.appendChild(btn);
+    }
+    filters.appendChild(row);
+  }
+}
+
+function computeMerged() {
+  const sys = state.system; const constraintsList = [];
+  for (const chip of state.activeChips) for (const group of Object.values(CLASSES[sys])) if (group[chip]) constraintsList.push(group[chip]);
+  return mergeConstraints(constraintsList);
+}
+
+function renderGrids() {
+  const gridC = document.getElementById("gridConsonants");
+  const gridV = document.getElementById("gridVowels");
+  const count = document.getElementById("count");
+  const active = document.getElementById("activeConstraints");
+  const merged = computeMerged();
+  const results = PHONEMES.filter(p => matches(p, merged, state.system));
+  gridC.innerHTML = ""; gridV.innerHTML = "";
+  const inC = results.filter(p => p.type === "consonant");
+  const inV = results.filter(p => p.type === "vowel");
+  for (const p of inC) {
+    const btn = document.createElement("button");
+    btn.className = "tile" + (state.selectedIPA.has(p.ipa) ? " active" : "");
+    btn.textContent = p.ipa; btn.title = p.ipa;
+    btn.onclick = () => { toggleSelect(p.ipa); };
+    gridC.appendChild(btn);
+  }
+  for (const p of inV) {
+    const btn = document.createElement("button");
+    btn.className = "tile" + (state.selectedIPA.has(p.ipa) ? " active" : "");
+    btn.textContent = p.ipa; btn.title = p.ipa;
+    btn.onclick = () => { toggleSelect(p.ipa); };
+    gridV.appendChild(btn);
+  }
+  if (count) count.textContent = results.length;
+  const mergedPairs = Object.entries(merged).filter(([k,v]) => v !== "#conflict");
+  if (active) active.textContent = mergedPairs.length ? "Active: " + mergedPairs.map(([k,v]) => `${k}=${v}`).join(", ") : "";
+}
+
+function toggleSelect(ipa){ if (state.selectedIPA.has(ipa)) state.selectedIPA.delete(ipa); else state.selectedIPA.add(ipa); renderDetails(); renderGrids(); }
+
+function classMembership(p){
+  const sys = state.system; const belongs = [];
+  for (const [groupName, chips] of Object.entries(CLASSES[sys])) {
+    for (const [label, constraint] of Object.entries(chips)) {
+      if (matches(p, constraint, sys)) belongs.push(label);
+    }
+  }
+  return belongs;
+}
+
+function sharedClasses(phonemes){
+  const sets = phonemes.map(p => new Set(classMembership(p)));
+  const first = sets[0]; const out = [];
+  for (const label of first) if (sets.every(s => s.has(label))) out.push(label);
+  return out;
+}
+
+function renderDetails(){
+  const el = document.getElementById("detailsContent");
+  const sys = state.system; const selected = PHONEMES.filter(p => state.selectedIPA.has(p.ipa));
+  if (selected.length === 0) { el.innerHTML = "Select one or more phonemes to see feature bundles and shared classes."; return; }
+  if (selected.length === 1) {
+    const p = selected[0]; const feats = p.features[sys];
+    const rows = Object.entries(feats).filter(([k,v]) => v !== undefined).map(([k, v]) => {
+      const cls = v === "+" ? "pos" : v === "-" ? "neg" : "";
+      return `<tr><td>${k}</td><td class="${cls}">${v}</td></tr>`;
+    }).join("");
+    const classes = classMembership(p);
+    el.innerHTML = `
+      <div class="row" style="gap:12px; align-items:center; margin-bottom:8px;">
+        <div class="tile active" style="height:44px; width:44px; font-size:20px;">${p.ipa}</div>
+        <div>
+          <div class="muted">Type: ${p.type}</div>
+          <div style="font-weight:600; font-size:13px; margin-top:4px;">Belongs to:</div>
+          <div class="chips" style="margin-top:6px;">${classes.map(x => `<span class="badge">${x}</span>`).join(" ") || '<span class="muted">—</span>'}</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Feature bundle (${sys})</div>
+        <table>${rows}</table>
+      </div>
+    `; return;
+  }
+  const common = {}; const allKeys = new Set();
+  for (const p of selected) for (const k of Object.keys(p.features[sys])) allKeys.add(k);
+  for (const k of allKeys) {
+    const values = selected.map(p => p.features[sys][k]).filter(v => v !== undefined);
+    if (values.length === 0) continue;
+    const first = values[0];
+    if (values.every(v => v === first)) common[k] = first;
+  }
+  const rows = Object.entries(common).map(([k, v]) => {
+    const cls = v === "+" ? "pos" : v === "-" ? "neg" : "";
+    return `<tr><td>${k}</td><td class="${cls}">${v}</td></tr>`;
+  }).join("");
+  const classes = sharedClasses(selected);
+  el.innerHTML = `
+    <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Selected (${selected.length}): ${selected.map(p=>p.ipa).join(", ")}</div>
+    <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Shared feature intersection (${sys})</div>
+    <table>${rows || '<tr><td colspan="2" class="muted">No shared features.</td></tr>'}</table>
+    <div style="font-weight:600; font-size:13px; margin:12px 0 6px;">Shared classes</div>
+    <div class="chips">${classes.map(x => `<span class="badge">${x}</span>`).join(" ") || '<span class="muted">—</span>'}</div>
+  `;
+}
+
+function renderAll(){ renderFilters(); renderGrids(); renderDetails(); }
+
+document.getElementById("resetBtn").onclick = () => { state.activeChips.clear(); renderAll(); };
+document.getElementById("clearSelectionBtn").onclick = () => { state.selectedIPA.clear(); renderDetails(); renderGrids(); };
+document.getElementById("toggleSystem").onclick = () => {
+  state.system = state.system === "SPE_1968" ? "Davenport" : "SPE_1968";
+  document.getElementById("systemBadge").textContent = "System: " + state.system;
+  renderAll();
+};
+document.getElementById("exportBtn").onclick = () => {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(PHONEMES, null, 2));
+  const a = document.createElement("a"); a.href = dataStr; a.download = "phonemes_ga.json"; a.click();
+};
+
+renderAll();
+</script>
+</body>
+</html>
