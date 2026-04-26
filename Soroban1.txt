@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soroban</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at center, #2c1500 0%, #080400 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, serif;
+  user-select: none;
+}
+
+#display {
+  color: #fde68a;
+  font-size: 52px;
+  font-weight: bold;
+  letter-spacing: 8px;
+  margin-bottom: 32px;
+  text-shadow: 0 0 40px rgba(253,230,138,.4);
+  font-variant-numeric: tabular-nums;
+  min-width: 260px;
+  text-align: right;
+}
+
+.frame {
+  background: linear-gradient(155deg, #8b4513 0%, #5c2d0a 45%, #7c3d10 100%);
+  border: 4px solid #2a1000;
+  border-radius: 12px;
+  padding: 20px 24px 16px;
+  box-shadow:
+    0 16px 48px rgba(0,0,0,.85),
+    inset 0 1px 0 rgba(255,180,80,.12),
+    inset 0 -1px 0 rgba(0,0,0,.4);
+}
+
+.board {
+  position: relative;
+}
+
+/* Single continuous reckoning bar spanning all columns */
+.reck-bar {
+  position: absolute;
+  top: 80px;       /* = upper section height */
+  left: -24px;     /* = frame horizontal padding */
+  right: -24px;
+  height: 12px;
+  background: linear-gradient(to bottom, #d4825a 0%, #7a3510 50%, #d4825a 100%);
+  border-radius: 2px;
+  box-shadow:
+    0 3px 10px rgba(0,0,0,.6),
+    inset 0 1px 0 rgba(255,200,120,.15);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.columns {
+  display: flex;
+  gap: 8px;
+}
+
+.column {
+  width: 54px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Vertical groove / rod */
+.column::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 30px; /* stop above the label */
+  left: 50%;
+  width: 6px;
+  transform: translateX(-50%);
+  background: linear-gradient(to right, #150800, #3d1a00, #150800);
+  border-radius: 3px;
+  z-index: 0;
+}
+
+.upper { height: 80px; position: relative; width: 100%; }
+.gap   { height: 12px; flex-shrink: 0; }  /* space covered by reck-bar overlay */
+.lower { height: 180px; position: relative; width: 100%; }
+
+.label {
+  height: 22px;
+  line-height: 22px;
+  font-size: 10px;
+  color: #9a5a28;
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+  text-align: center;
+  width: 100%;
+}
+
+/* ── Bead ── */
+.bead {
+  position: absolute;
+  left: 50%;
+  width: 50px;
+  height: 26px;
+  transform: translateX(-50%);
+  cursor: pointer;
+  z-index: 2;
+  transition: top .2s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+/* Diamond (bicone) shape */
+.bead::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  background: linear-gradient(155deg,
+    #fef9c3 0%,
+    #fcd34d 22%,
+    #b45309 68%,
+    #6b2500 100%);
+  transition: filter .12s;
+}
+
+/* Specular glint */
+.bead::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 10px;
+  width: 22px;
+  height: 9px;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  background: rgba(255,255,255,.18);
+  pointer-events: none;
+}
+
+.bead:hover::before { filter: brightness(1.22); }
+
+.bead.active::before {
+  background: linear-gradient(155deg,
+    #fffde7 0%,
+    #fde68a 22%,
+    #ca8a04 68%,
+    #7c3010 100%);
+  filter: drop-shadow(0 0 4px rgba(252,211,77,.55));
+}
+
+/* ── Clear button ── */
+#clearBtn {
+  margin-top: 24px;
+  padding: 10px 40px;
+  background: linear-gradient(to bottom, #5c2c0a, #3a1607);
+  color: #fbbf24;
+  border: 1.5px solid rgba(251,191,36,.55);
+  border-radius: 6px;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  letter-spacing: 4px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.5);
+  transition: background .15s, box-shadow .15s, transform .08s;
+}
+#clearBtn:hover {
+  background: linear-gradient(to bottom, #7c3f00, #5c2c0a);
+  box-shadow: 0 4px 20px rgba(0,0,0,.65);
+}
+#clearBtn:active { transform: translateY(1px); }
+</style>
+</head>
+<body>
+
+<div id="display">0</div>
+
+<div class="frame">
+  <div class="board">
+    <div class="reck-bar"></div>
+    <div class="columns" id="columns"></div>
+  </div>
+</div>
+
+<button id="clearBtn">CLEAR</button>
+
+<script>
+// Column place values, left to right: ten-thousands → units
+const PLACES = [10000, 1000, 100, 10, 1];
+const LABELS = ['10,000', '1,000', '100', '10', '1'];
+
+const UPPER_H = 80;   // px: height of section above reckoning bar
+const LOWER_H = 180;  // px: height of section below reckoning bar
+const BEAD_H  = 26;   // px: bead element height
+const STEP    = 32;   // px: center-to-center spacing when beads are stacked
+
+// state[i] = { heaven: bool, earth: 0..4 }
+const state = PLACES.map(() => ({ heaven: false, earth: 0 }));
+
+// Heaven bead: inactive = near top, active = near bar
+function heavenTop(active) {
+  return active ? UPPER_H - BEAD_H - 4 : 4;
+}
+
+// Earth bead pos 1..4 (1 = closest to bar):
+//   active   → cluster near bar from top
+//   inactive → cluster away from bar at bottom
+function earthTop(pos, count) {
+  return pos <= count
+    ? 4 + (pos - 1) * STEP
+    : LOWER_H - BEAD_H - 4 - (4 - pos) * STEP;
+}
+
+function totalValue() {
+  return state.reduce((sum, s, i) =>
+    sum + ((s.heaven ? 5 : 0) + s.earth) * PLACES[i], 0);
+}
+
+function refreshDisplay() {
+  document.getElementById('display').textContent =
+    totalValue().toLocaleString();
+}
+
+function refreshCol(ci) {
+  const col = document.getElementById('columns').children[ci];
+
+  const hb = col.querySelector('.upper .bead');
+  hb.style.top = heavenTop(state[ci].heaven) + 'px';
+  hb.classList.toggle('active', state[ci].heaven);
+
+  col.querySelectorAll('.lower .bead').forEach((b, idx) => {
+    const pos = idx + 1;
+    b.style.top = earthTop(pos, state[ci].earth) + 'px';
+    b.classList.toggle('active', pos <= state[ci].earth);
+  });
+}
+
+function build() {
+  const wrap = document.getElementById('columns');
+
+  PLACES.forEach((_, ci) => {
+    const col = document.createElement('div');
+    col.className = 'column';
+
+    // Upper section + heaven bead
+    const upper = document.createElement('div');
+    upper.className = 'upper';
+    const hb = document.createElement('div');
+    hb.className = 'bead';
+    hb.style.top = heavenTop(false) + 'px';
+    hb.addEventListener('click', () => {
+      state[ci].heaven = !state[ci].heaven;
+      refreshCol(ci);
+      refreshDisplay();
+    });
+    upper.appendChild(hb);
+
+    // Spacer aligned with the reckoning bar overlay
+    const gap = document.createElement('div');
+    gap.className = 'gap';
+
+    // Lower section + earth beads
+    const lower = document.createElement('div');
+    lower.className = 'lower';
+    for (let pos = 1; pos <= 4; pos++) {
+      const eb = document.createElement('div');
+      eb.className = 'bead';
+      eb.style.top = earthTop(pos, 0) + 'px';
+      const p = pos;
+      // Click: if bead p is active, deactivate it (and above); else activate up to p
+      eb.addEventListener('click', () => {
+        state[ci].earth = p <= state[ci].earth ? p - 1 : p;
+        refreshCol(ci);
+        refreshDisplay();
+      });
+      lower.appendChild(eb);
+    }
+
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    lbl.textContent = LABELS[ci];
+
+    col.append(upper, gap, lower, lbl);
+    wrap.appendChild(col);
+  });
+}
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  state.forEach(s => { s.heaven = false; s.earth = 0; });
+  PLACES.forEach((_, ci) => refreshCol(ci));
+  refreshDisplay();
+});
+
+build();
+</script>
+</body>
+</html>
